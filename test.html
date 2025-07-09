@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Test Suite</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .test-pass {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .test-fail {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .test-warn {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #test-dashboard {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>cVDPV2 Dashboard Test Suite</h1>
+    
+    <div class="test-container">
+        <h2>Filter Logic Tests</h2>
+        <button onclick="runAllTests()">Run All Tests</button>
+        <button onclick="runFilterTests()">Test Filters</button>
+        <button onclick="runSIATests()">Test SIA Logic</button>
+        <button onclick="runEdgeCases()">Test Edge Cases</button>
+        <div id="test-results"></div>
+    </div>
+
+    <!-- Hidden dashboard for testing -->
+    <div id="test-dashboard">
+        <div id="ri-filter">
+            <input type="checkbox" id="ri-0" value="0">
+            <input type="checkbox" id="ri-1" value="1">
+        </div>
+        <div id="obr-filter">
+            <input type="checkbox" id="obr-0" value="0">
+            <input type="checkbox" id="obr-1" value="1">
+        </div>
+        <input type="checkbox" id="sia-enabled">
+        <div id="sia-frequency">
+            <input type="checkbox" id="sia-1y" value="1Y">
+            <input type="checkbox" id="sia-2y" value="2Y">
+        </div>
+        <div id="sia-extent">
+            <input type="checkbox" id="sia-nga" value="NGA">
+            <input type="checkbox" id="sia-ngan" value="NGAN">
+            <input type="checkbox" id="sia-lkchad" value="LKCHAD">
+        </div>
+        <div id="sia-age">
+            <input type="checkbox" id="sia-u5" value="U5">
+            <input type="checkbox" id="sia-u2" value="U2">
+        </div>
+        <select id="highlight-var">
+            <option value="none">None</option>
+            <option value="RI">RI</option>
+            <option value="OBR">OBR</option>
+        </select>
+        <input type="checkbox" id="show-error-bars">
+    </div>
+
+    <script>
+        // Test data - subset of actual data structure
+        const testData = [
+            {
+                NAME: "experiment_cVDPV2_100km_base",
+                CASES_MU: 9368, CASES_LO: 8137, CASES_HI: 10806,
+                COST: 2, RI: 0, OBR: 0,
+                'SIA.NGA': 0, 'SIA.NGAN': 0, 'SIA.LKCHAD': 0,
+                'SIA.U2': 0, 'SIA.1Y': 0, 'SIA.2Y': 0
+            },
+            {
+                NAME: "experiment_cVDPV2_100km_base_ri2027",
+                CASES_MU: 2071, CASES_LO: 581, CASES_HI: 2851,
+                COST: 70.5, RI: 1, OBR: 0,
+                'SIA.NGA': 0, 'SIA.NGAN': 0, 'SIA.LKCHAD': 0,
+                'SIA.U2': 0, 'SIA.1Y': 0, 'SIA.2Y': 0
+            },
+            {
+                NAME: "experiment_cVDPV2_100km_base_sia01-NGA",
+                CASES_MU: 1487, CASES_LO: 133, CASES_HI: 2347,
+                COST: 162, RI: 0, OBR: 0,
+                'SIA.NGA': 1, 'SIA.NGAN': 0, 'SIA.LKCHAD': 0,
+                'SIA.U2': 0, 'SIA.1Y': 1, 'SIA.2Y': 0
+            },
+            {
+                NAME: "experiment_cVDPV2_100km_base_sia01u2-NGA",
+                CASES_MU: 2868, CASES_LO: 163, CASES_HI: 3774,
+                COST: 64, RI: 0, OBR: 0,
+                'SIA.NGA': 1, 'SIA.NGAN': 0, 'SIA.LKCHAD': 0,
+                'SIA.U2': 1, 'SIA.1Y': 1, 'SIA.2Y': 0
+            },
+            {
+                NAME: "experiment_cVDPV2_100km_base_obr2026_ri2027",
+                CASES_MU: 301, CASES_LO: 170, CASES_HI: 649,
+                COST: 135.5, RI: 1, OBR: 1,
+                'SIA.NGA': 0, 'SIA.NGAN': 0, 'SIA.LKCHAD': 0,
+                'SIA.U2': 0, 'SIA.1Y': 0, 'SIA.2Y': 0
+            }
+        ];
+
+        // Copy of filtering functions from main dashboard
+        function checkSIAMatch(row, freq, extent, age) {
+            const freqMatch = (freq === '1Y' && row['SIA.1Y'] === 1) || (freq === '2Y' && row['SIA.2Y'] === 1);
+            const extentMatch = row[`SIA.${extent}`] === 1;
+            const ageMatch = (age === 'U2' && row['SIA.U2'] === 1) || (age === 'U5' && row['SIA.U2'] === 0);
+            
+            return freqMatch && extentMatch && ageMatch;
+        }
+
+        function filterTestData(filters) {
+            return testData.filter(row => {
+                // RI filter
+                if (filters.ri.length > 0 && !filters.ri.includes(row.RI)) return false;
+                
+                // OBR filter
+                if (filters.obr.length > 0 && !filters.obr.includes(row.OBR)) return false;
+                
+                // SIA filter
+                if (!filters.siaEnabled) {
+                    return row['SIA.NGA'] === 0 && row['SIA.NGAN'] === 0 && row['SIA.LKCHAD'] === 0;
+                } else {
+                    const hasNoSIA = row['SIA.NGA'] === 0 && row['SIA.NGAN'] === 0 && row['SIA.LKCHAD'] === 0;
+                    if (hasNoSIA) return true;
+                    
+                    let matchesSIA = false;
+                    for (const freq of filters.siaFreq) {
+                        for (const extent of filters.siaExtent) {
+                            for (const age of filters.siaAge) {
+                                if (checkSIAMatch(row, freq, extent, age)) {
+                                    matchesSIA = true;
+                                    break;
+                                }
+                            }
+                            if (matchesSIA) break;
+                        }
+                        if (matchesSIA) break;
+                    }
+                    return matchesSIA;
+                }
+            });
+        }
+
+        // Test functions
+        function runTest(testName, testFn) {
+            const resultsDiv = document.getElementById('test-results');
+            try {
+                const result = testFn();
+                const resultDiv = document.createElement('div');
+                resultDiv.className = `test-result ${result.success ? 'test-pass' : 'test-fail'}`;
+                resultDiv.innerHTML = `<strong>${testName}:</strong> ${result.message}`;
+                resultsDiv.appendChild(resultDiv);
+                return result.success;
+            } catch (error) {
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'test-result test-fail';
+                resultDiv.innerHTML = `<strong>${testName}:</strong> ERROR - ${error.message}`;
+                resultsDiv.appendChild(resultDiv);
+                return false;
+            }
+        }
+
+        function testBasicFiltering() {
+            // Test RI filtering
+            const riOnlyFilters = {
+                ri: [1], obr: [0, 1], siaEnabled: false,
+                siaFreq: [], siaExtent: [], siaAge: []
+            };
+            const riResults = filterTestData(riOnlyFilters);
+            const hasRI = riResults.every(row => row.RI === 1);
+            const hasNoSIA = riResults.every(row => row['SIA.NGA'] === 0 && row['SIA.NGAN'] === 0 && row['SIA.LKCHAD'] === 0);
+            
+            return {
+                success: hasRI && hasNoSIA,
+                message: hasRI && hasNoSIA ? 'RI filtering works correctly' : 'RI filtering failed'
+            };
+        }
+
+        function testSIALogic() {
+            // Test SIA filtering with specific parameters
+            const siaFilters = {
+                ri: [0, 1], obr: [0, 1], siaEnabled: true,
+                siaFreq: ['1Y'], siaExtent: ['NGA'], siaAge: ['U5']
+            };
+            const siaResults = filterTestData(siaFilters);
+            
+            // Should include base scenarios + SIA scenarios matching criteria
+            const hasCorrectSIA = siaResults.some(row => 
+                row['SIA.NGA'] === 1 && row['SIA.1Y'] === 1 && row['SIA.U2'] === 0
+            );
+            const hasBase = siaResults.some(row => 
+                row['SIA.NGA'] === 0 && row['SIA.NGAN'] === 0 && row['SIA.LKCHAD'] === 0
+            );
+            
+            return {
+                success: hasCorrectSIA && hasBase,
+                message: hasCorrectSIA && hasBase ? 'SIA logic works correctly' : 'SIA logic failed'
+            };
+        }
+
+        function testEmptyResults() {
+            // Test scenario that should return empty results
+            const impossibleFilters = {
+                ri: [], obr: [0, 1], siaEnabled: true,
+                siaFreq: [], siaExtent: [], siaAge: []
+            };
+            const emptyResults = filterTestData(impossibleFilters);
+            
+            return {
+                success: emptyResults.length === 0,
+                message: emptyResults.length === 0 ? 'Empty filter detection works' : 'Empty filter detection failed'
+            };
+        }
+
+        function testAllCombinations() {
+            // Test multiple filter combinations
+            const testCases = [
+                { ri: [0], obr: [0], siaEnabled: false, expected: 'base only' },
+                { ri: [1], obr: [0], siaEnabled: false, expected: 'RI only' },
+                { ri: [0, 1], obr: [0, 1], siaEnabled: true, siaFreq: ['1Y', '2Y'], siaExtent: ['NGA'], siaAge: ['U5', 'U2'], expected: 'all SIA-NGA' }
+            ];
+            
+            let allPassed = true;
+            let details = [];
+            
+            testCases.forEach((testCase, index) => {
+                const filters = {
+                    ri: testCase.ri,
+                    obr: testCase.obr,
+                    siaEnabled: testCase.siaEnabled,
+                    siaFreq: testCase.siaFreq || [],
+                    siaExtent: testCase.siaExtent || [],
+                    siaAge: testCase.siaAge || []
+                };
+                
+                const results = filterTestData(filters);
+                const hasResults = results.length > 0;
+                
+                if (!hasResults && testCase.expected !== 'empty') {
+                    allPassed = false;
+                    details.push(`Test case ${index + 1} (${testCase.expected}) returned empty results`);
+                }
+            });
+            
+            return {
+                success: allPassed,
+                message: allPassed ? 'All filter combinations work' : `Some combinations failed: ${details.join(', ')}`
+            };
+        }
+
+        function testDataIntegrity() {
+            // Test that data is properly structured
+            const hasRequiredFields = testData.every(row => 
+                typeof row.CASES_MU === 'number' &&
+                typeof row.COST === 'number' &&
+                typeof row.RI === 'number' &&
+                typeof row.OBR === 'number'
+            );
+            
+            return {
+                success: hasRequiredFields,
+                message: hasRequiredFields ? 'Data integrity check passed' : 'Data integrity check failed'
+            };
+        }
+
+        function runFilterTests() {
+            document.getElementById('test-results').innerHTML = '<h3>Filter Tests</h3>';
+            runTest('Basic RI Filtering', testBasicFiltering);
+            runTest('SIA Logic', testSIALogic);
+            runTest('Empty Results Handling', testEmptyResults);
+        }
+
+        function runSIATests() {
+            document.getElementById('test-results').innerHTML = '<h3>SIA Tests</h3>';
+            runTest('SIA Combination Logic', testSIALogic);
+            runTest('Filter Combinations', testAllCombinations);
+        }
+
+        function runEdgeCases() {
+            document.getElementById('test-results').innerHTML = '<h3>Edge Cases</h3>';
+            runTest('Data Integrity', testDataIntegrity);
+            runTest('Empty Filter Results', testEmptyResults);
+        }
+
+        function runAllTests() {
+            document.getElementById('test-results').innerHTML = '<h3>All Tests</h3>';
+            
+            let passedTests = 0;
+            let totalTests = 0;
+            
+            const tests = [
+                ['Data Integrity', testDataIntegrity],
+                ['Basic RI Filtering', testBasicFiltering],
+                ['SIA Logic', testSIALogic],
+                ['Empty Results Handling', testEmptyResults],
+                ['Filter Combinations', testAllCombinations]
+            ];
+            
+            tests.forEach(([name, testFn]) => {
+                totalTests++;
+                if (runTest(name, testFn)) {
+                    passedTests++;
+                }
+            });
+            
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = `test-result ${passedTests === totalTests ? 'test-pass' : 'test-warn'}`;
+            summaryDiv.innerHTML = `<strong>Summary:</strong> ${passedTests}/${totalTests} tests passed`;
+            document.getElementById('test-results').appendChild(summaryDiv);
+        }
+    </script>
+</body>
+</html>
